@@ -1,0 +1,54 @@
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: Type detection smoke test
+        run: |
+          python -c "
+          from enrich import detect_type
+          from models.ioc import IOCType
+          assert detect_type('8.8.8.8') == IOCType.IP
+          assert detect_type('example.com') == IOCType.DOMAIN
+          assert detect_type('https://evil.com/path') == IOCType.URL
+          assert detect_type('44d88612fea8a8f36de82e1278abb02f') == IOCType.HASH_MD5
+          assert detect_type('da39a3ee5e6b4b0d3255bfef95601890afd80709') == IOCType.HASH_SHA1
+          print('All type detection tests passed.')
+          "
+
+      - name: Cache smoke test
+        run: |
+          python -c "
+          from core.cache import EnrichmentCache
+          import tempfile, pathlib
+          with tempfile.TemporaryDirectory() as d:
+              c = EnrichmentCache(db_path=pathlib.Path(d) / 'test.db', ttl=60)
+              c.set('8.8.8.8', 'vt', {'status': 'ok', 'malicious': 0})
+              result = c.get('8.8.8.8', 'vt')
+              assert result is not None
+              assert result['status'] == 'ok'
+              print('Cache tests passed.')
+          "
+
+      - name: Risk scorer smoke test
+        run: |
+          python -c "
+          from core.scorer import score_ioc
+          r = score_ioc({'virustotal': {'status': 'ok', 'malicious': 20, 'total_engines': 70}})
+          assert r['band'] in ('HIGH', 'CRITICAL'), f'Expected HIGH/CRITICAL, got {r[\"band\"]}'
+          r2 = score_ioc({'virustotal': {'status': 'ok', 'malicious': 0, 'total_engines': 70}})
+          assert r2['band'] == 'LOW'
+          print('Scorer tests passed.')
+          "

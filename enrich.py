@@ -17,9 +17,13 @@ from pathlib import Path
 
 from models.ioc import IOC, IOCType
 from enrichers.virustotal import VirusTotalEnricher
-from enrichers.abuseipdb import AbuseIPDBEnricher
-from enrichers.whois_lookup import WhoisEnricher
-from reporter import build_markdown_report, build_json_report
+from enrichers.abuseipdb     import AbuseIPDBEnricher
+from enrichers.greynoise     import GreyNoiseEnricher
+from enrichers.malwarebazaar import MalwareBazaarEnricher
+from enrichers.whois_lookup  import WhoisEnricher
+from core.cache  import EnrichmentCache
+from core.scorer import score_ioc
+from reporter import build_markdown_report
 
 
 def detect_type(value: str) -> IOCType:
@@ -42,21 +46,49 @@ def detect_type(value: str) -> IOCType:
     return IOCType.DOMAIN
 
 
-def enrich_ioc(ioc: IOC, vt_key: str | None, abuse_key: str | None) -> dict:
-    results: dict = {"ioc": ioc.value, "type": ioc.type.value, "enrichments": {}}
+def enrich_ioc(
+    ioc: IOC,
+    vt_key: str | None,
+    abuse_key: str | None,
+    gn_key: str | None = None,
+    cache: EnrichmentCache | None = None,
+) -> dict:
+    result: dict = {"ioc": ioc.value, "type": ioc.type.value, "enrichments": {}}
 
-    vt = VirusTotalEnricher(api_key=vt_key)
-    results["enrichments"]["virustotal"] = vt.enrich(ioc)
+    def _cached(source: str, fn):
+        if cache:
+            hit = cache.get(ioc.value, source)
+            if hit is not None:
+                return hit
+        data = fn()
+        if cache:
+            cache.set(ioc.value, source, data)
+        return data
+
+    result["enrichments"]["virustotal"] = _cached(
+        "virustotal", lambda: VirusTotalEnricher(api_key=vt_key).enrich(ioc)
+    )
 
     if ioc.type == IOCType.IP:
-        abuse = AbuseIPDBEnricher(api_key=abuse_key)
-        results["enrichments"]["abuseipdb"] = abuse.enrich(ioc)
+        result["enrichments"]["abuseipdb"] = _cached(
+            "abuseipdb", lambda: AbuseIPDBEnricher(api_key=abuse_key).enrich(ioc)
+        )
+        result["enrichments"]["greynoise"] = _cached(
+            "greynoise", lambda: GreyNoiseEnricher(api_key=gn_key).enrich(ioc)
+        )
+
+    if ioc.type in (IOCType.HASH_MD5, IOCType.HASH_SHA1, IOCType.HASH_SHA256):
+        result["enrichments"]["malwarebazaar"] = _cached(
+            "malwarebazaar", lambda: MalwareBazaarEnricher().enrich(ioc)
+        )
 
     if ioc.type in (IOCType.DOMAIN, IOCType.URL):
-        whois = WhoisEnricher()
-        results["enrichments"]["whois"] = whois.enrich(ioc)
+        result["enrichments"]["whois"] = _cached(
+            "whois", lambda: WhoisEnricher().enrich(ioc)
+        )
 
-    return results
+    result["risk"] = score_ioc(result["enrichments"])
+    return result
 
 
 def load_iocs_from_file(path: Path) -> list[str]:
@@ -79,20 +111,31 @@ def main():
         "--output", "-o", default=None,
         help="Write output to this file instead of stdout."
     )
+    parser.add_argument(
+        "--no-cache", action="store_true",
+        help="Bypass the local SQLite enrichment cache."
+    )
     args = parser.parse_args()
 
     vt_key    = os.getenv("VT_API_KEY")
     abuse_key = os.getenv("ABUSEIPDB_API_KEY")
+    gn_key    = os.getenv("GREYNOISE_API_KEY")
+
+    cache = None if args.no_cache else EnrichmentCache()
+    if cache:
+        stats = cache.stats()
+        print(f"[*] Cache: {stats['live']} live entries, {stats['expired']} expired.",
+              file=sys.stderr)
 
     if not vt_key:
-        print("[WARN] VT_API_KEY not set – VirusTotal enrichment will use public lookups only.",
+        print("[WARN] VT_API_KEY not set – VirusTotal enrichment will be limited.",
               file=sys.stderr)
 
     raw_iocs = [args.ioc] if args.ioc else load_iocs_from_file(Path(args.file))
     iocs     = [IOC(value=v, type=detect_type(v)) for v in raw_iocs]
 
     print(f"[*] Enriching {len(iocs)} IOC(s)...", file=sys.stderr)
-    all_results = [enrich_ioc(ioc, vt_key, abuse_key) for ioc in iocs]
+    all_results = [enrich_ioc(ioc, vt_key, abuse_key, gn_key, cache) for ioc in iocs]
 
     if args.format == "json":
         output = json.dumps(all_results, indent=2)
