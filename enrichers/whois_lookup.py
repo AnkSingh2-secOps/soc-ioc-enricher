@@ -1,4 +1,4 @@
-"""enrichers/whois_lookup.py – WHOIS enrichment for domain/URL IOCs."""
+"""enrichers/whois_lookup.py - WHOIS enrichment for domain/URL IOCs."""
 
 import logging
 from typing import Any

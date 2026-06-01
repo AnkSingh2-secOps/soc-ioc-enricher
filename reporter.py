@@ -1,4 +1,4 @@
-"""reporter.py – Formats enrichment results as Markdown or JSON."""
+"""reporter.py - Formats enrichment results as Markdown."""
 
 from typing import Any
 
@@ -40,7 +40,7 @@ def build_markdown_report(results: list[dict[str, Any]]) -> str:
         elif vt.get("status") == "not_found":
             lines.append("- No data found in VirusTotal.")
         else:
-            lines.append(f"- Status: `{vt.get('status')}` – {vt.get('reason', '')}")
+lines.append(f"- Status: `{vt.get('status')}` - {vt.get('reason', '')}")
 
         lines.append("")
 
@@ -60,7 +60,7 @@ def build_markdown_report(results: list[dict[str, Any]]) -> str:
                     f"- Last Reported: `{ab.get('last_reported_at', 'N/A')}`",
                 ]
             else:
-                lines.append(f"- Status: `{ab.get('status')}` – {ab.get('reason', '')}")
+                lines.append(f"- Status: `{ab.get('status')}` - {ab.get('reason', '')}")
             lines.append("")
 
         # GreyNoise
@@ -79,7 +79,7 @@ def build_markdown_report(results: list[dict[str, Any]]) -> str:
             elif gn.get("status") == "not_found":
                 lines.append("- Not seen by GreyNoise.")
             else:
-                lines.append(f"- Status: `{gn.get('status')}` – {gn.get('reason', '')}")
+                lines.append(f"- Status: `{gn.get('status')}` - {gn.get('reason', '')}")
             lines.append("")
 
         # MalwareBazaar
@@ -99,7 +99,7 @@ def build_markdown_report(results: list[dict[str, Any]]) -> str:
             elif mb.get("status") == "not_found":
                 lines.append("- Hash not found in MalwareBazaar.")
             else:
-                lines.append(f"- Status: `{mb.get('status')}` – {mb.get('reason', '')}")
+                lines.append(f"- Status: `{mb.get('status')}` - {mb.get('reason', '')}")
             lines.append("")
 
         # WHOIS
@@ -115,7 +115,7 @@ def build_markdown_report(results: list[dict[str, Any]]) -> str:
                     f"- Country: `{wh.get('country', 'N/A')}`",
                 ]
             else:
-                lines.append(f"- Status: `{wh.get('status')}` – {wh.get('reason', '')}")
+                lines.append(f"- Status: `{wh.get('status')}` - {wh.get('reason', '')}")
             lines.append("")
 
         lines += ["---", ""]

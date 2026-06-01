@@ -1,4 +1,4 @@
-"""enrichers/virustotal.py – VirusTotal v3 enrichment."""
+"""enrichers/virustotal.py - VirusTotal v3 enrichment."""
 
 import logging
 import time

@@ -1,4 +1,4 @@
-"""enrichers/greynoise.py – GreyNoise IP context enrichment."""
+"""enrichers/greynoise.py - GreyNoise IP context enrichment."""
 
 import logging
 import time

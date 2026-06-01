@@ -128,7 +128,7 @@ def main():
               file=sys.stderr)
 
     if not vt_key:
-        print("[WARN] VT_API_KEY not set – VirusTotal enrichment will be limited.",
+        print("[WARN] VT_API_KEY not set - VirusTotal enrichment will be limited.",
               file=sys.stderr)
 
     raw_iocs = [args.ioc] if args.ioc else load_iocs_from_file(Path(args.file))
